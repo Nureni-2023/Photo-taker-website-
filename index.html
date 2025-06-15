@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FotoForge - Camera & Photo Editor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --dark-bg: #1a1a2e;
+            --darker-bg: #0f0f1d;
+            --light-text: #e0e0e0;
+            --accent-color: #e94560; /* Vibrant red/pink */
+            --button-hover: #c73650;
+            --border-color: #3e2f5b;
+            --shadow-color: rgba(0, 0, 0, 0.4);
+        }
+
+        body {
+            font-family: 'Open Sans', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--dark-bg);
+            color: var(--light-text);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow-x: hidden;
+            align-items: center;
+        }
+
+        h1 {
+            font-family: 'Montserrat', sans-serif;
+            color: var(--accent-color);
+            text-align: center;
+            padding: 20px 10px;
+            margin-bottom: 0;
+            font-size: 2.8em;
+            letter-spacing: 1px;
+        }
+
+        .container {
+            flex-grow: 1;
+            width: 95%;
+            max-width: 1200px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px 0;
+            box-sizing: border-box;
+        }
+
+        /* Camera & Canvas Area */
+        .camera-area, .preview-area {
+            background-color: var(--darker-bg);
+            border-radius: 12px;
+            box-shadow: 0 8px 25px var(--shadow-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden; /* Ensure content stays within borders */
+            position: relative;
+            min-height: 300px; /* Minimum height for visibility */
+        }
+
+        video, canvas {
+            max-width: 100%;
+            max-height: 80vh; /* Don't let it get too tall */
+            display: block;
+            border-radius: 10px;
+        }
+
+        .video-feed {
+            width: 100%;
+            height: auto;
+            object-fit: contain; /* or 'cover' depending on desired fill */
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Controls */
+        .controls {
+            background-color: var(--darker-bg);
+            border-radius: 12px;
+            box-shadow: 0 8px 25px var(--shadow-color);
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .control-group.sliders label {
+            flex-basis: 100%;
+            text-align: center;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .control-group.sliders input[type="range"] {
+            flex-grow: 1;
+            width: calc(50% - 15px); /* Approx half width for two sliders per row */
+            min-width: 200px;
+            -webkit-appearance: none;
+            background: var(--border-color);
+            height: 8px;
+            border-radius: 5px;
+            outline: none;
+        }
+
+        .control-group.sliders input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            border: 2px solid var(--light-text);
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+
+        .control-group.sliders input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            border: 2px solid var(--light-text);
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+
+        .control-button {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 600;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            min-width: 150px; /* Ensure consistent button width */
+        }
+
+        .control-button:hover {
+            background-color: var(--button-hover);
+            transform: translateY(-2px);
+        }
+
+        .control-button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Cropping overlay */
+        #croppingOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Allows clicks to pass through to underlying canvas */
+            box-sizing: border-box;
+            opacity: 0; /* Hidden by default */
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        #croppingOverlay.active {
+            opacity: 1;
+            pointer-events: auto; /* Enable interaction when active */
+        }
+
+        .crop-guide {
+            position: absolute;
+            border: 2px dashed #00bfff; /* Cyan dashed border */
+            box-sizing: border-box;
+            background-color: rgba(0, 191, 255, 0.1); /* Light transparent fill */
+            cursor: move; /* Indicates draggable */
+        }
+
+        .resizer {
+            width: 10px;
+            height: 10px;
+            background: white;
+            border: 1px solid var(--accent-color);
+            position: absolute;
+            border-radius: 50%;
+            box-sizing: border-box;
+        }
+        .resizer.nw { top: -5px; left: -5px; cursor: nwse-resize; }
+        .resizer.ne { top: -5px; right: -5px; cursor: nesw-resize; }
+        .resizer.sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+        .resizer.se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+
+
+        .message {
+            text-align: center;
+            color: var(--accent-color);
+            padding: 15px;
+            border-radius: 8px;
+            background-color: rgba(233, 69, 96, 0.1);
+            margin-top: 20px;
+            display: none;
+        }
+
+        .message.active {
+            display: block;
+        }
+
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            margin-top: 30px;
+            color: var(--light-text);
+            font-size: 0.9em;
+        }
+
+        /* Responsive Adjustments */
+        @media (min-width: 769px) {
+            .container {
+                flex-direction: row;
+                align-items: flex-start; /* Align items to the top */
+            }
+
+            .camera-area, .preview-area {
+                flex: 1; /* Take equal space */
+                min-height: 400px;
+            }
+
+            .controls {
+                flex-basis: 300px; /* Fixed width for controls on larger screens */
+                flex-shrink: 0; /* Prevent controls from shrinking */
+                padding: 30px;
+                order: 2; /* Place controls on the right */
+            }
+
+            .main-content {
+                order: 1; /* Place camera/preview on the left */
+                flex: 2;
+            }
+
+            .control-group.sliders {
+                flex-direction: column;
+                gap: 10px;
+                align-items: flex-start;
+            }
+            .control-group.sliders label {
+                text-align: left;
+            }
+            .control-group.sliders input[type="range"] {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2em; padding: 15px 10px; }
+            .container { padding: 15px; gap: 15px; }
+            .controls { padding: 20px; }
+            .control-button { padding: 10px 20px; font-size: 1em; min-width: unset; flex-grow: 1; }
+            .control-group { flex-direction: column; }
+            .control-group.sliders input[type="range"] { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <h1>FotoForge</h1>
+
+    <div class="container">
+        <div class="camera-area" id="cameraArea">
+            <video id="videoFeed" class="video-feed" autoplay playsinline></video>
+            <div id="cameraErrorMessage" class="message">
+                Camera access denied or not available. Please allow camera permissions.
+            </div>
+        </div>
+
+        <div class="preview-area hidden" id="previewArea">
+            <canvas id="photoCanvas"></canvas>
+            <div id="croppingOverlay" class="hidden">
+                <div class="crop-guide" id="cropGuide">
+                    <div class="resizer nw"></div>
+                    <div class="resizer ne"></div>
+                    <div class="resizer sw"></div>
+                    <div class="resizer se"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <button id="captureButton" class="control-button">Capture Photo</button>
+                <button id="flipCameraButton" class="control-button hidden">Flip Camera</button>
+            </div>
+
+            <div class="control-group sliders" id="editSliders">
+                <label for="brightness">Brightness:</label>
+                <input type="range" id="brightness" min="0.5" max="1.5" step="0.01" value="1">
+
+                <label for="contrast">Contrast:</label>
+                <input type="range" id="contrast" min="0.5" max="1.5" step="0.01" value="1">
+            </div>
+
+            <div class="control-group" id="filterButtons">
+                <button id="grayscaleBtn" class="control-button">Grayscale</button>
+                <button id="sepiaBtn" class="control-button">Sepia</button>
+                <button id="invertBtn" class="control-button">Invert</button>
+            </div>
+
+            <div class="control-group" id="cropControls">
+                <button id="enableCropBtn" class="control-button">Enable Crop</button>
+                <button id="applyCropBtn" class="control-button hidden">Apply Crop</button>
+                <button id="cancelCropBtn" class="control-button hidden">Cancel Crop</button>
+            </div>
+
+            <div class="control-group">
+                <button id="resetEditsBtn" class="control-button">Reset Edits</button>
+                <button id="downloadImageBtn" class="control-button">Download Image</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 FotoForge. All rights reserved. Built with passion for creativity.</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const videoFeed = document.getElementById('videoFeed');
+            const photoCanvas = document.getElementById('photoCanvas');
+            const ctx = photoCanvas.getContext('2d');
+            const cameraArea = document.getElementById('cameraArea');
+            const previewArea = document.getElementById('previewArea');
+            const cameraErrorMessage = document.getElementById('cameraErrorMessage');
+
+            const captureButton = document.getElementById('captureButton');
+            const flipCameraButton = document.getElementById('flipCameraButton');
+            const brightnessSlider = document.getElementById('brightness');
+            const contrastSlider = document.getElementById('contrast');
+            const grayscaleBtn = document.getElementById('grayscaleBtn');
+            const sepiaBtn = document.getElementById('sepiaBtn');
+            const invertBtn = document.getElementById('invertBtn');
+            const enableCropBtn = document.getElementById('enableCropBtn');
+            const applyCropBtn = document.getElementById('applyCropBtn');
+            const cancelCropBtn = document.getElementById('cancelCropBtn');
+            const resetEditsBtn = document.getElementById('resetEditsBtn');
+            const downloadImageBtn = document.getElementById('downloadImageBtn');
+
+            const croppingOverlay = document.getElementById('croppingOverlay');
+            const cropGuide = document.getElementById('cropGuide');
+
+            let currentStream;
+            let currentFacingMode = 'environment'; // 'user' for front, 'environment' for rear
+            let originalImageData = null; // Store the original captured image data
+            let editedImageApplied = false; // Flag to check if current image on canvas is from edits
+            let isCropping = false;
+            let cropRect = { x: 0, y: 0, width: 0, height: 0 };
+            let drag = false;
+            let resize = false;
+            let startX, startY, startCropWidth, startCropHeight, startCropX, startCropY;
+            let activeResizer = null;
+
+            // --- Camera Functions ---
+            async function setupCamera() {
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+
+                cameraErrorMessage.classList.remove('active'); // Hide error message
+
+                const constraints = {
+                    video: {
+                        facingMode: currentFacingMode,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+
+                try {
+                    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    videoFeed.srcObject = currentStream;
+                    videoFeed.play();
+                    videoFeed.classList.remove('hidden'); // Show video feed
+                    cameraArea.classList.remove('hidden');
+                    previewArea.classList.add('hidden');
+
+                    // Check if multiple cameras are available for flip button
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoInputDevices = devices.filter(device => device.kind === 'videoinput');
+                    if (videoInputDevices.length > 1 && /Mobi|Android/i.test(navigator.userAgent)) { // Only show flip button on mobile with multiple cameras
+                        flipCameraButton.classList.remove('hidden');
+                    } else {
+                        flipCameraButton.classList.add('hidden');
+                    }
+
+                    toggleEditControls(false); // Disable edit controls until photo is taken
+                    resetSliders();
+                    disableCropMode();
+
+                } catch (error) {
+                    console.error('Error accessing camera:', error);
+                    cameraErrorMessage.textContent = `Error: ${error.name}. Please ensure camera access is allowed.`;
+                    cameraErrorMessage.classList.add('active');
+                    videoFeed.classList.add('hidden'); // Hide video feed if error
+                    flipCameraButton.classList.add('hidden'); // Hide flip button on error
+                    captureButton.disabled = true; // Disable capture on error
+                }
+            }
+
+            function takePhoto() {
+                if (!currentStream) return;
+
+                videoFeed.pause(); // Pause video feed
+
+                // Set canvas dimensions to match video feed
+                photoCanvas.width = videoFeed.videoWidth;
+                photoCanvas.height = videoFeed.videoHeight;
+
+                // Draw video frame to canvas
+                ctx.drawImage(videoFeed, 0, 0, photoCanvas.width, photoCanvas.height);
+                originalImageData = ctx.getImageData(0, 0, photoCanvas.width, photoCanvas.height);
+
+                cameraArea.classList.add('hidden');
+                previewArea.classList.remove('hidden');
+                toggleEditControls(true); // Enable edit controls
+                captureButton.textContent = 'Retake Photo';
+            }
+
+            function retakePhoto() {
+                videoFeed.play(); // Resume video feed
+                cameraArea.classList.remove('hidden');
+                previewArea.classList.add('hidden');
+                captureButton.textContent = 'Capture Photo';
+                originalImageData = null;
+                editedImageApplied = false;
+                resetSliders();
+                disableCropMode();
+                toggleEditControls(false); // Disable edit controls until new photo is taken
+            }
+
+            function flipCamera() {
+                currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+                setupCamera();
+            }
+
+            // --- Image Editing Functions ---
+            function applyFilters() {
+                if (!originalImageData) return;
+
+                const imageData = new ImageData(
+                    new Uint8ClampedArray(originalImageData.data),
+                    originalImageData.width,
+                    originalImageData.height
+                );
+                const data = imageData.data;
+                const brightnessVal = parseFloat(brightnessSlider.value);
+                const contrastVal = parseFloat(contrastSlider.value);
+
+                // Apply brightness and contrast
+                const factor = (259 * (contrastVal * 255 + 255)) / (255 * (259 - contrastVal * 255));
+                for (let i = 0; i < data.length; i += 4) {
+                    // Brightness
+                    data[i] = data[i] * brightnessVal;
+                    data[i+1] = data[i+1] * brightnessVal;
+                    data[i+2] = data[i+2] * brightnessVal;
+
+                    // Contrast
+                    data[i] = factor * (data[i] - 128) + 128;
+                    data[i+1] = factor * (data[i+1] - 128) + 128;
+                    data[i+2] = factor * (data[i+2] - 128) + 128;
+
+                    // Clamp values to 0-255
+                    data[i] = Math.max(0, Math.min(255, data[i]));
+                    data[i+1] = Math.max(0, Math.min(255, data[i+1]));
+                    data[i+2] = Math.max(0, Math.min(255, data[i+2]));
+                }
+
+                // Apply filters based on active state (simplified for this example)
+                if (grayscaleBtn.classList.contains('active')) {
+                    for (let i = 0; i < data.length; i += 4) {
+                        const avg = (data[i] + data[i+1] + data[i+2]) / 3;
+                        data[i] = avg;
+                        data[i+1] = avg;
+                        data[i+2] = avg;
+                    }
+                }
+                if (sepiaBtn.classList.contains('active')) {
+                    for (let i = 0; i < data.length; i += 4) {
+                        const r = data[i];
+                        const g = data[i+1];
+                        const b = data[i+2];
+                        data[i] = Math.min(255, (r * 0.393) + (g * 0.769) + (b * 0.189));
+                        data[i+1] = Math.min(255, (r * 0.349) + (g * 0.686) + (b * 0.168));
+                        data[i+2] = Math.min(255, (r * 0.272) + (g * 0.534) + (b * 0.131));
+                    }
+                }
+                if (invertBtn.classList.contains('active')) {
+                    for (let i = 0; i < data.length; i += 4) {
+                        data[i] = 255 - data[i];
+                        data[i+1] = 255 - data[i+1];
+                        data[i+2] = 255 - data[i+2];
+                    }
+                }
+
+                ctx.putImageData(imageData, 0, 0);
+                editedImageApplied = true;
+            }
+
+            function toggleFilter(button) {
+                button.classList.toggle('active');
+                applyFilters();
+            }
+
+            function resetEdits() {
+                if (originalImageData) {
+                    ctx.putImageData(originalImageData, 0, 0);
+                    resetSliders();
+                    grayscaleBtn.classList.remove('active');
+                    sepiaBtn.classList.remove('active');
+                    invertBtn.classList.remove('active');
+                    editedImageApplied = false;
+                }
+            }
+
+            function resetSliders() {
+                brightnessSlider.value = 1;
+                contrastSlider.value = 1;
+            }
+
+            function downloadImage() {
+                if (!originalImageData) {
+                    alert('No photo to download!');
+                    return;
+                }
+                const link = document.createElement('a');
+                link.download = `fotoforge-image-${Date.now()}.jpg`;
+                link.href = photoCanvas.toDataURL('image/jpeg', 0.9); // Quality 0.9
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+            function toggleEditControls(enable) {
+                const controlsToToggle = [
+                    brightnessSlider, contrastSlider, grayscaleBtn, sepiaBtn,
+                    invertBtn, enableCropBtn, resetEditsBtn, downloadImageBtn
+                ];
+                controlsToToggle.forEach(control => {
+                    control.disabled = !enable;
+                    if (enable) {
+                        control.classList.remove('disabled'); // For visual feedback
+                    } else {
+                        control.classList.add('disabled');
+                    }
+                });
+            }
+
+            // --- Cropping Functions ---
+            function enableCropMode() {
+                if (!originalImageData) return;
+
+                isCropping = true;
+                croppingOverlay.classList.add('active');
+                enableCropBtn.classList.add('hidden');
+                applyCropBtn.classList.remove('hidden');
+                cancelCropBtn.classList.remove('hidden');
+
+                // Initial crop guide to cover the whole image
+                const canvasRect = photoCanvas.getBoundingClientRect();
+                cropRect.x = 0;
+                cropRect.y = 0;
+                cropRect.width = canvasRect.width;
+                cropRect.height = canvasRect.height;
+                updateCropGuidePosition();
+
+                // Disable other editing tools while cropping
+                brightnessSlider.disabled = true;
+                contrastSlider.disabled = true;
+                grayscaleBtn.disabled = true;
+                sepiaBtn.disabled = true;
+                invertBtn.disabled = true;
+                resetEditsBtn.disabled = true;
+                downloadImageBtn.disabled = true;
+            }
+
+            function disableCropMode() {
+                isCropping = false;
+                croppingOverlay.classList.remove('active');
+                enableCropBtn.classList.remove('hidden');
+                applyCropBtn.classList.add('hidden');
+                cancelCropBtn.classList.add('hidden');
+
+                // Re-enable editing tools if a photo is captured
+                if (originalImageData) {
+                    toggleEditControls(true);
+                }
+            }
+
+            function updateCropGuidePosition() {
+                cropGuide.style.left = `${cropRect.x}px`;
+                cropGuide.style.top = `${cropRect.y}px`;
+                cropGuide.style.width = `${cropRect.width}px`;
+                cropGuide.style.height = `${cropRect.height}px`;
+            }
+
+            function applyCrop() {
+                if (!originalImageData || !isCropping) return;
+
+                const scaleX = originalImageData.width / photoCanvas.width;
+                const scaleY = originalImageData.height / photoCanvas.height;
+
+                const cropX = cropRect.x * scaleX;
+                const cropY = cropRect.y * scaleY;
+                const cropWidth = cropRect.width * scaleX;
+                const cropHeight = cropRect.height * scaleY;
+
+                // Create a temporary canvas to draw the cropped image
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = cropWidth;
+                tempCanvas.height = cropHeight;
+                const tempCtx = tempCanvas.getContext('2d');
+
+                // Draw the original image data onto the temp canvas, cropped
+                tempCtx.drawImage(
+                    photoCanvas, // Use the current state of photoCanvas to get applied filters
+                    cropX, cropY, cropWidth, cropHeight, // Source rectangle
+                    0, 0, cropWidth, cropHeight // Destination rectangle
+                );
+
+                // Update the main canvas with the cropped image
+                photoCanvas.width = cropWidth;
+                photoCanvas.height = cropHeight;
+                ctx.clearRect(0, 0, photoCanvas.width, photoCanvas.height);
+                ctx.drawImage(tempCanvas, 0, 0);
+
+                // Update originalImageData for future edits based on the cropped version
+                originalImageData = ctx.getImageData(0, 0, photoCanvas.width, photoCanvas.height);
+                editedImageApplied = true; // Cropping counts as an edit
+
+                disableCropMode();
+            }
+
+            // Cropping Mouse Events
+            photoCanvas.addEventListener('mousedown', (e) => {
+                if (!isCropping) return;
+
+                const rect = photoCanvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                // Check if a resizer is clicked
+                const resizers = cropGuide.querySelectorAll('.resizer');
+                for (let i = 0; i < resizers.length; i++) {
+                    const r = resizers[i].getBoundingClientRect();
+                    if (mouseX >= (r.left - rect.left) && mouseX <= (r.right - rect.left) &&
+                        mouseY >= (r.top - rect.top) && mouseY <= (r.bottom - rect.top)) {
+                        resize = true;
+                        activeResizer = resizers[i];
+                        startX = mouseX;
+                        startY = mouseY;
+                        startCropWidth = cropRect.width;
+                        startCropHeight = cropRect.height;
+                        startCropX = cropRect.x;
+                        startCropY = cropRect.y;
+                        return;
+                    }
+                }
+
+                // Check if inside crop guide for dragging
+                if (mouseX >= cropRect.x && mouseX <= (cropRect.x + cropRect.width) &&
+                    mouseY >= cropRect.y && mouseY <= (cropRect.y + cropRect.height)) {
+                    drag = true;
+                    startX = mouseX;
+                    startY = mouseY;
+                    startCropX = cropRect.x;
+                    startCropY = cropRect.y;
+                }
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isCropping || (!drag && !resize)) return;
+
+                const rect = photoCanvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                const dx = mouseX - startX;
+                const dy = mouseY - startY;
+
+                if (drag) {
+                    cropRect.x = startCropX + dx;
+                    cropRect.y = startCropY + dy;
+
+                    // Keep crop guide within canvas bounds
+                    cropRect.x = Math.max(0, Math.min(cropRect.x, photoCanvas.width - cropRect.width));
+                    cropRect.y = Math.max(0, Math.min(cropRect.y, photoCanvas.height - cropRect.height));
+
+                } else if (resize && activeResizer) {
+                    const minSize = 50; // Minimum crop size
+
+                    if (activeResizer.classList.contains('nw')) {
+                        cropRect.x = Math.min(startCropX + dx, startCropX + startCropWidth - minSize);
+                        cropRect.y = Math.min(startCropY + dy, startCropY + startCropHeight - minSize);
+                        cropRect.width = startCropWidth - (cropRect.x - startCropX);
+                        cropRect.height = startCropHeight - (cropRect.y - startCropY);
+                    } else if (activeResizer.classList.contains('ne')) {
+                        cropRect.y = Math.min(startCropY + dy, startCropY + startCropHeight - minSize);
+                        cropRect.width = Math.max(minSize, startCropWidth + dx);
+                        cropRect.height = startCropHeight - (cropRect.y - startCropY);
+                    } else if (activeResizer.classList.contains('sw')) {
+                        cropRect.x = Math.min(startCropX + dx, startCropX + startCropWidth - minSize);
+                        cropRect.width = startCropWidth - (cropRect.x - startCropX);
+                        cropRect.height = Math.max(minSize, startCropHeight + dy);
+                    } else if (activeResizer.classList.contains('se')) {
+                        cropRect.width = Math.max(minSize, startCropWidth + dx);
+                        cropRect.height = Math.max(minSize, startCropHeight + dy);
+                    }
+
+                    // Clamp to canvas bounds during resize
+                    cropRect.x = Math.max(0, cropRect.x);
+                    cropRect.y = Math.max(0, cropRect.y);
+                    cropRect.width = Math.min(photoCanvas.width - cropRect.x, cropRect.width);
+                    cropRect.height = Math.min(photoCanvas.height - cropRect.y, cropRect.height);
+                }
+                updateCropGuidePosition();
+            });
+
+            document.addEventListener('mouseup', () => {
+                drag = false;
+                resize = false;
+                activeResizer = null;
+            });
+
+
+            // --- Event Listeners ---
+            captureButton.addEventListener('click', () => {
+                if (captureButton.textContent === 'Capture Photo') {
+                    takePhoto();
+                } else {
+                    retakePhoto();
+                }
+            });
+
+            flipCameraButton.addEventListener('click', flipCamera);
+
+            brightnessSlider.addEventListener('input', applyFilters);
+            contrastSlider.addEventListener('input', applyFilters);
+
+            grayscaleBtn.addEventListener('click', () => toggleFilter(grayscaleBtn));
+            sepiaBtn.addEventListener('click', () => toggleFilter(sepiaBtn));
+            invertBtn.addEventListener('click', () => toggleFilter(invertBtn));
+
+            enableCropBtn.addEventListener('click', enableCropMode);
+            applyCropBtn.addEventListener('click', applyCrop);
+            cancelCropBtn.addEventListener('click', disableCropMode);
+
+            resetEditsBtn.addEventListener('click', resetEdits);
+            downloadImageBtn.addEventListener('click', downloadImage);
+
+            // Initial camera setup
+            setupCamera();
+        });
+    </script>
+</body>
+</html>
